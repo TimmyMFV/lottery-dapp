@@ -1,4 +1,4 @@
-This is a lottery-dapp.
+This is the lottery-dapp.
 
 ## Getting Started
 
