@@ -103,8 +103,8 @@ contract Lottery {
     }
 
     function changeMasterAccount(address account) public onlyDealer {
-        //master account should be different dealer account
-        require(account != dealer);
+        //master account should be different with dealer account - the round must be end before change master account
+        require(account != dealer && isEnded == true);
         masterAccount = account;
     }
 
