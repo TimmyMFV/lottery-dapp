@@ -12,6 +12,10 @@
   font-size: 0.9em;
 }
 
+.lotteryinfo ul li {
+  list-style-type: none;
+}
+
 .footer {
   display: flex;
   flex: 1;

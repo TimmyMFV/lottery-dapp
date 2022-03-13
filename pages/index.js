@@ -16,8 +16,14 @@ export default function Home() {
   const [lotteryReward, setLotteryReward] = useState()
   const [lotteryRoundStatus, setLotteryRoundStatus] = useState()
   const [lotteryWinners, setLotteryWinners] = useState([])
+  const [error, setError] = useState('')
+  const [successMsg, setSuccessMsg] = useState('')
 
   useEffect(() => {
+    updateState()
+  }, [lcContract])
+
+  const updateState = () => {
     if (lcContract) {
       getBalance(),
       getCurRound(),
@@ -27,7 +33,7 @@ export default function Home() {
       getRoundStatus(),
       getWinners()
     }
-  }, [lcContract, lotteryBalance, lotteryCurRound, lotteryTotalPlayers, lotteryReward, lotteryRoundStatus, lotteryWinners])
+  }
 
   const getBalance = async() => {
     const balance = await lcContract.method.getBalance().call()
@@ -51,7 +57,7 @@ export default function Home() {
 
   const getReward = async() => {
     const reward = await lcContract.method.getWinningReward().call()
-    setLotteryReward(reward)
+    setLotteryReward(Web3.utils.fromWei(reward, 'ether'))
   }
 
   const getRoundStatus = async() => {
@@ -68,21 +74,69 @@ export default function Home() {
     setLotteryWinners(winners)
   }
 
+  const changeMasterAccountHandler = async() => {
+    setError('')
+    const address = document.getElementById("input_address").value
+    try {
+      await lcContract.method.changeMasterAccount().send(address, {
+        from: address,
+        gas: 300000,
+        gasPrice: null
+      })
+      setSuccessMsg("Master account has been changing successfully: " + address)
+    } catch(err) {
+      setError(err.message)
+    }
+  }
+
   const playHandler = async() => {
+    setError('')
     const bettingNumber = document.getElementById("input_number").value
     try {
       await lcContract.method.play().send(bettingNumber, {
         from: address,
-        value: 1,
+        value: "1000000000000000000", //1 Ether
         gas: 300000,
         gasPrice: null
       })
-    } catch(error) {
-      console.log(error.message)
+    } catch(err) {
+      setError(err.message)
     }
   }
 
+  const startRoundHandler = async() => {
+    setError('')
+    try {
+      await lcContract.method.startGame().send({
+        from: address,
+        gas: 300000,
+        gasPrice: null
+      })
+      updateState()
+    } catch(err) {
+      setError(err.message)
+    }
+  }
+
+  const endRoundHandler = async() => {
+    setError('')
+    try {
+      await lcContract.method.endGame().send({
+        from: address,
+        gas: 300000,
+        gasPrice: null
+      })
+      updateState()
+      setSuccessMsg("The lucky number is: " + lotteryLuckyNumber)
+    } catch(err) {
+      setError(err.message)
+    }
+  }
+
+  
+
   const connectWalletHandler = async () => {
+    setError('')
     //check if MetaMask is installed
     if (typeof window !== "undefined" && typeof window.ethereum !== "undefined") {
         try {
@@ -94,14 +148,19 @@ export default function Home() {
           setWeb3(web3)
           //get list of accounts
           const accounts = await web3.eth.getAccounts()
-          //get 1st account to React state
+          //get account 1st to React state
           setAddress(accounts[0])
 
           //create local contract copy
           const lc = lotteryContract(web3)
           setLcContract(lc)
-        } catch (error) {
-          console.log(error.message)
+
+          window.ethereum.on("accountsChanged", async () => {
+            const accounts = await web3.eth.getAccounts()
+            setAddress(accounts[0])
+          })
+        } catch (err) {
+          setError(err.message)
         }
     } else {
       //MetaMask is not installed
@@ -139,16 +198,26 @@ export default function Home() {
                 </section>
                 <section className='mt-5'>
                   <p><b>Dealer only:</b> Start round</p>
-                  <button className='button is-primary is-large is-light mt-3'>Start</button>
+                  <button onClick={startRoundHandler} className='button is-primary is-large is-light mt-3'>Start</button>
                 </section>
                 <section className='mt-5'>
                   <p><b>Dealer only:</b> End round</p>
-                  <button className='button is-primary is-large is-light mt-3'>End</button>
+                  <button onClick={endRoundHandler} className='button is-primary is-large is-light mt-3'>End</button>
                 </section>
                 <section className='mt-5'>
                   <p><b>Dealer only:</b> Change master account</p>
                   <input class="input is-primary" type="text" placeholder="Input master account" id='input_address'></input>
-                  <button className='button is-primary is-large is-light mt-3'>Change</button>
+                  <button onClick={changeMasterAccountHandler} className='button is-primary is-large is-light mt-3'>Change</button>
+                </section>
+                <section>
+                    <div className='container has-text-danger mt-6'>
+                      <p>{error}</p>
+                    </div>
+                </section>
+                <section>
+                    <div className='container has-text-success mt-6'>
+                      <p>{successMsg}</p>
+                    </div>
                 </section>
               </div>
               <div className={`${styles.lotteryinfo} column is-one-third`}>
@@ -185,7 +254,7 @@ export default function Home() {
                       <div className='content'>
                         <h2>Reward</h2>
                         <div className='reward-entry'>
-                          <div>Each winner reward (Ether): {lotteryReward}</div>
+                          <div>Each winner will be rewarded (Ether): {lotteryReward}</div>
                         </div>
                       </div>
                     </div>
@@ -195,15 +264,19 @@ export default function Home() {
                   <div className='card'>
                     <div className='card-content'>
                       <div className='content'>
-                        <h2>Winners</h2>
+                        <h2>Winners ({lotteryWinners.length})</h2>
                         <div className='winners-entry'>
+                        <ul className='ml-0'>
                           {
-                            lotteryWinners.map((winner) => {
-                              <a href={`https://etherscan.io/address/${winner}`} target='_blank'>
-                              {winner}
-                              </a>
+                            (lotteryWinners && lotteryWinners.length > 0) && lotteryWinners.map((winner, index) => {
+                              return <li key={`${winner}-${index}`}>
+                                <a href={`https://etherscan.io/address/${winner}`} target='_blank'>
+                                {winner}
+                                </a>
+                              </li>
                             })
                           }
+                        </ul> 
                         </div>
                       </div>
                     </div>
